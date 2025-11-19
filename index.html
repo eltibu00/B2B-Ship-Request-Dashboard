@@ -966,7 +966,8 @@
         const CONFIG = {
             APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx_3858dOL-bVRNvgtnAnxKfRBmOFzMhm4444Yh1LYYCSazEeJ0L9XgtXVtwvqJQoB1/exec',
             SPREADSHEET_ID: '1FgMwIloe9NAUnkl1AU-qFscas1hTzrM4qdnNg14pE64',
-            SESSION_KEY: 'shipRequestUser'
+            SESSION_KEY: 'shipRequestUser',
+            USE_LOCAL_STORAGE: true  // Use localStorage to stay logged in
         };
 
         let currentUser = null;
@@ -987,7 +988,8 @@
         // ====================================================================
 
         function checkLogin() {
-            const stored = sessionStorage.getItem(CONFIG.SESSION_KEY);
+            const storage = CONFIG.USE_LOCAL_STORAGE ? localStorage : sessionStorage;
+            const stored = storage.getItem(CONFIG.SESSION_KEY);
             if (stored) {
                 currentUser = JSON.parse(stored);
                 showDashboard();
@@ -1014,7 +1016,8 @@
             }
 
             currentUser = { name, email };
-            sessionStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(currentUser));
+            const storage = CONFIG.USE_LOCAL_STORAGE ? localStorage : sessionStorage;
+            storage.setItem(CONFIG.SESSION_KEY, JSON.stringify(currentUser));
             
             document.getElementById('loginOverlay').style.display = 'none';
             showDashboard();
@@ -1022,7 +1025,8 @@
 
         function handleLogout() {
             if (confirm('Are you sure you want to logout?')) {
-                sessionStorage.removeItem(CONFIG.SESSION_KEY);
+                const storage = CONFIG.USE_LOCAL_STORAGE ? localStorage : sessionStorage;
+                storage.removeItem(CONFIG.SESSION_KEY);
                 currentUser = null;
                 location.reload();
             }
@@ -1061,25 +1065,54 @@
 
         async function loadClients() {
             try {
-                const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Clients`;
-                const response = await fetch(url);
-                const text = await response.text();
-                
-                const jsonData = JSON.parse(text.substring(47).slice(0, -2));
-                const clients = jsonData.table.rows.map(row => row.c[0]?.v).filter(Boolean);
+                // Load clients from Apps Script API instead of direct Google Sheets
+                const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?action=getClients`);
+                const data = await response.json();
                 
                 const select = document.getElementById('client');
                 select.innerHTML = '<option value="">Select a client...</option>';
                 
-                clients.forEach(client => {
+                if (data.clients && data.clients.length > 0) {
+                    data.clients.forEach(client => {
+                        const option = document.createElement('option');
+                        option.value = client;
+                        option.textContent = client;
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.innerHTML = '<option value="">No clients found</option>';
+                }
+            } catch (error) {
+                console.error('Error loading clients:', error);
+                document.getElementById('client').innerHTML = '<option value="">Error loading clients - Check console</option>';
+                
+                // Fallback: Try to manually populate with known clients
+                const fallbackClients = [
+                    'Bears with Benefits, Inc.( Havea)',
+                    'Biologique Recherche (BR)',
+                    'Clariant ( LMC)',
+                    'Granado, INC.',
+                    'Lampe Berger ( Maison)',
+                    'LimeLife USA LLC',
+                    'Maelys Cosmetics',
+                    'Natura International, Inc.',
+                    'Pierre Fabre (PF)',
+                    'Promix Nutrition TopCo Inc',
+                    'Radixis Inc (DBA Yves Rocher USA)',
+                    'Tiffany and Company',
+                    'VB Beauty LLC'
+                ];
+                
+                const select = document.getElementById('client');
+                select.innerHTML = '<option value="">Select a client...</option>';
+                fallbackClients.forEach(client => {
                     const option = document.createElement('option');
                     option.value = client;
                     option.textContent = client;
                     select.appendChild(option);
                 });
-            } catch (error) {
-                console.error('Error loading clients:', error);
-                document.getElementById('client').innerHTML = '<option value="">Error loading clients</option>';
+                
+                console.log('Using fallback client list');
             }
         }
 
