@@ -817,6 +817,11 @@
                                 <label class="required">Weight (lbs)</label>
                                 <input type="number" id="palletWeight" required min="1" step="0.1" placeholder="800">
                             </div>
+
+                            <div class="form-group">
+                                <label class="required">Carton Count</label>
+                                <input type="number" id="cartonCount" required min="1" step="1" placeholder="50">
+                            </div>
                         </div>
 
                         <div class="button-group">
@@ -1447,11 +1452,12 @@
                 length: parseFloat(document.getElementById('palletLength').value),
                 width: parseFloat(document.getElementById('palletWidth').value),
                 height: parseFloat(document.getElementById('palletHeight').value),
-                weight: parseFloat(document.getElementById('palletWeight').value)
+                weight: parseFloat(document.getElementById('palletWeight').value),
+                cartonCount: parseInt(document.getElementById('cartonCount').value)
             };
 
-            if (!palletData.type || !palletData.length || !palletData.width || !palletData.height || !palletData.weight) {
-                alert('Please fill in all pallet dimensions');
+            if (!palletData.type || !palletData.length || !palletData.width || !palletData.height || !palletData.weight || !palletData.cartonCount) {
+                alert('Please fill in all pallet dimensions and carton count');
                 return;
             }
 
@@ -1478,7 +1484,7 @@
                         <div>
                             <strong>Pallet ${index + 1}:</strong> ${pallet.type} | 
                             ${pallet.length}x${pallet.width}x${pallet.height}" | 
-                            ${pallet.weight} lbs | ${pallet.cubeFt} ft³
+                            ${pallet.weight} lbs | ${pallet.cartonCount} cartons | ${pallet.cubeFt} ft³
                         </div>
                         <button class="btn btn-secondary" style="padding: 8px 16px; min-width: auto;" onclick="removePallet(${index})">Remove</button>
                     </div>
@@ -1521,6 +1527,7 @@
                             width: pallet.width,
                             height: pallet.height,
                             weight: pallet.weight,
+                            cartonCount: pallet.cartonCount,
                             updatedBy: currentUser.name
                         })
                     });
@@ -1561,6 +1568,7 @@
             document.getElementById('palletWidth').value = '';
             document.getElementById('palletHeight').value = '';
             document.getElementById('palletWeight').value = '';
+            document.getElementById('cartonCount').value = '';
         }
 
         function clearDimsForm() {
@@ -1839,6 +1847,7 @@
                                         <div><strong>Pallet ${pallet.palletNumber}:</strong> ${pallet.palletType}</div>
                                         <div><strong>Dimensions:</strong> ${pallet.length}x${pallet.width}x${pallet.height}"</div>
                                         <div><strong>Weight:</strong> ${pallet.weight} lbs</div>
+                                        <div><strong>Cartons:</strong> ${pallet.cartonCount || 0}</div>
                                         <div><strong>Cube:</strong> ${pallet.cubeFt} ft³</div>
                                         <div><strong>Footprint:</strong> ${pallet.footprint}</div>
                                         <div><strong>Entered by:</strong> ${pallet.updatedBy}</div>
