@@ -625,6 +625,7 @@
             <div class="tabs">
                 <button class="tab-button active" onclick="switchTab('new-request')">📝 New Ship Request</button>
                 <button class="tab-button" onclick="switchTab('enter-dims')">📏 Enter Dims</button>
+                <button class="tab-button" onclick="switchTab('view-dims')">📦 View Dims</button>
                 <button class="tab-button" onclick="switchTab('ops-dashboard')">📊 Operations Dashboard</button>
                 <button class="tab-button" onclick="switchTab('reports')">📋 Reports & Archive</button>
             </div>
@@ -835,7 +836,31 @@
                 </div>
             </div>
 
-            <!-- Tab 3: Operations Dashboard -->
+            <!-- Tab 3: View Dims -->
+            <div id="view-dims" class="tab-content">
+                <h2 style="margin-bottom: 20px; color: #667eea;">📦 Orders with Dimensions</h2>
+                
+                <div class="info-message" style="display: block;">
+                    <h4>ℹ️ View All Orders with Entered Dimensions</h4>
+                    <p>This shows all orders that have pallet dimensions entered. Click on an order to expand and see detailed pallet information.</p>
+                </div>
+
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="loadOrdersWithDims()">🔄 Refresh</button>
+                    <button class="btn btn-success" onclick="openDimsSheet()">📊 Open Dimensions Sheet (Backend)</button>
+                </div>
+                
+                <div class="loading" id="dimsViewLoading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 15px;">Loading orders with dimensions...</p>
+                </div>
+
+                <div id="dimsViewContent" style="display: none;">
+                    <div id="ordersWithDimsList"></div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Operations Dashboard -->
             <div id="ops-dashboard" class="tab-content">
                 <h2 style="margin-bottom: 20px; color: #667eea;">📊 Operations Dashboard</h2>
                 
@@ -906,7 +931,7 @@
                 </div>
             </div>
 
-            <!-- Tab 4: Reports & Archive -->
+            <!-- Tab 5: Reports & Archive -->
             <div id="reports" class="tab-content">
                 <h2 style="margin-bottom: 20px; color: #667eea;">📋 Reports & Archive</h2>
                 
@@ -981,6 +1006,10 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             checkLogin();
+            // Setup auto-fill after DOM is ready
+            setTimeout(() => {
+                setupPalletAutoFill();
+            }, 1000);
         });
 
         // ====================================================================
@@ -1056,6 +1085,8 @@
 
             if (tabName === 'ops-dashboard') {
                 refreshDashboard();
+            } else if (tabName === 'view-dims') {
+                loadOrdersWithDims();
             }
         }
 
@@ -1539,6 +1570,66 @@
         }
 
         // ====================================================================
+        // AUTO-FILL PALLET DIMENSIONS
+        // ====================================================================
+
+        function setupPalletAutoFill() {
+            const palletTypeSelect = document.getElementById('palletType');
+            if (!palletTypeSelect) return;
+
+            palletTypeSelect.addEventListener('change', function() {
+                const palletType = this.value;
+                const lengthInput = document.getElementById('palletLength');
+                const widthInput = document.getElementById('palletWidth');
+                
+                if (palletType === 'Regular 48x40') {
+                    lengthInput.value = 48;
+                    widthInput.value = 40;
+                    lengthInput.readOnly = true;
+                    widthInput.readOnly = true;
+                    lengthInput.style.backgroundColor = '#e9ecef';
+                    widthInput.style.backgroundColor = '#e9ecef';
+                    lengthInput.style.cursor = 'not-allowed';
+                    widthInput.style.cursor = 'not-allowed';
+                } else if (palletType === 'Euro 31x47') {
+                    lengthInput.value = 31;
+                    widthInput.value = 47;
+                    lengthInput.readOnly = true;
+                    widthInput.readOnly = true;
+                    lengthInput.style.backgroundColor = '#e9ecef';
+                    widthInput.style.backgroundColor = '#e9ecef';
+                    lengthInput.style.cursor = 'not-allowed';
+                    widthInput.style.cursor = 'not-allowed';
+                } else if (palletType === 'Plastic') {
+                    lengthInput.value = 48;
+                    widthInput.value = 40;
+                    lengthInput.readOnly = true;
+                    widthInput.readOnly = true;
+                    lengthInput.style.backgroundColor = '#e9ecef';
+                    widthInput.style.backgroundColor = '#e9ecef';
+                    lengthInput.style.cursor = 'not-allowed';
+                    widthInput.style.cursor = 'not-allowed';
+                } else if (palletType === 'Custom') {
+                    lengthInput.value = '';
+                    widthInput.value = '';
+                    lengthInput.readOnly = false;
+                    widthInput.readOnly = false;
+                    lengthInput.style.backgroundColor = 'white';
+                    widthInput.style.backgroundColor = 'white';
+                    lengthInput.style.cursor = 'text';
+                    widthInput.style.cursor = 'text';
+                } else {
+                    lengthInput.value = '';
+                    widthInput.value = '';
+                    lengthInput.readOnly = false;
+                    widthInput.readOnly = false;
+                    lengthInput.style.backgroundColor = 'white';
+                    widthInput.style.backgroundColor = 'white';
+                }
+            });
+        }
+
+        // ====================================================================
         // OPERATIONS DASHBOARD
         // ====================================================================
 
@@ -1671,6 +1762,120 @@
 
         function generateClientReport() {
             alert('Client Performance Report\n\nThis feature will generate a client performance report showing:\n- Orders by client\n- Average turnaround time\n- SLA compliance percentage\n- Priority distribution\n\nComing soon!');
+        }
+
+        // ====================================================================
+        // VIEW DIMS TAB FUNCTIONS
+        // ====================================================================
+
+        async function loadOrdersWithDims() {
+            document.getElementById('dimsViewLoading').style.display = 'block';
+            document.getElementById('dimsViewContent').style.display = 'none';
+
+            try {
+                const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?action=getOrdersWithDims`);
+                const data = await response.json();
+                
+                document.getElementById('dimsViewLoading').style.display = 'none';
+                
+                if (data.orders && data.orders.length > 0) {
+                    displayOrdersWithDims(data.orders);
+                    document.getElementById('dimsViewContent').style.display = 'block';
+                } else {
+                    document.getElementById('ordersWithDimsList').innerHTML = 
+                        '<div style="text-align: center; padding: 40px; color: #666;">' +
+                        '<h3>No orders with dimensions found</h3>' +
+                        '<p>Orders will appear here after dimensions are entered in the "Enter Dims" tab.</p>' +
+                        '</div>';
+                    document.getElementById('dimsViewContent').style.display = 'block';
+                }
+
+            } catch (error) {
+                console.error('Error loading orders with dims:', error);
+                document.getElementById('dimsViewLoading').style.display = 'none';
+                alert('Error loading orders with dimensions. Please check your Apps Script deployment.');
+            }
+        }
+
+        function displayOrdersWithDims(orders) {
+            const container = document.getElementById('ordersWithDimsList');
+            let html = '';
+
+            orders.forEach((order, index) => {
+                const priorityClass = order.clientPriority === 'High' ? 'priority-high' :
+                                    order.clientPriority === 'Low' ? 'priority-low' : 'priority-normal';
+                
+                html += `
+                    <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px;">
+                            <div>
+                                <h3 style="color: #667eea; margin-bottom: 5px;">
+                                    Order #${order.orderNumber} 
+                                    <span class="${priorityClass}" style="margin-left: 10px;">${order.clientPriority}</span>
+                                </h3>
+                                <div style="color: #666;">
+                                    <strong>${order.client}</strong> | ${order.retailer} | ${order.requestedMode}
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.2em; font-weight: bold; color: #667eea;">
+                                    ${order.totalPallets} Pallet${order.totalPallets > 1 ? 's' : ''}
+                                </div>
+                                <div style="color: #666;">
+                                    ${order.totalCubeFt} ft³ | ${order.totalWeight} lbs
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-secondary" onclick="togglePalletDetails(${index})" 
+                                style="width: 100%; margin-bottom: 10px;" id="toggleBtn${index}">
+                            📦 View Pallet Details ▼
+                        </button>
+
+                        <div id="palletDetails${index}" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                            ${order.pallets.map((pallet, pIndex) => `
+                                <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #667eea;">
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 0.95em;">
+                                        <div><strong>Pallet ${pallet.palletNumber}:</strong> ${pallet.palletType}</div>
+                                        <div><strong>Dimensions:</strong> ${pallet.length}x${pallet.width}x${pallet.height}"</div>
+                                        <div><strong>Weight:</strong> ${pallet.weight} lbs</div>
+                                        <div><strong>Cube:</strong> ${pallet.cubeFt} ft³</div>
+                                        <div><strong>Footprint:</strong> ${pallet.footprint}</div>
+                                        <div><strong>Entered by:</strong> ${pallet.updatedBy}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
+                            <strong>PO:</strong> ${order.po || 'N/A'} | 
+                            <strong>Ship Date:</strong> ${order.requestedShipDate} | 
+                            <strong>Status:</strong> ${order.status}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function togglePalletDetails(index) {
+            const detailsDiv = document.getElementById(`palletDetails${index}`);
+            const btn = document.getElementById(`toggleBtn${index}`);
+            
+            if (detailsDiv.style.display === 'none') {
+                detailsDiv.style.display = 'block';
+                btn.innerHTML = '📦 Hide Pallet Details ▲';
+            } else {
+                detailsDiv.style.display = 'none';
+                btn.innerHTML = '📦 View Pallet Details ▼';
+            }
+        }
+
+        function openDimsSheet() {
+            const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SPREADSHEET_ID}/edit`;
+            window.open(url, '_blank');
+            alert('Opening Google Sheets in new tab. Look for the "Order_Dims" tab at the bottom.');
         }
 
     </script>
