@@ -909,7 +909,15 @@
                     </div>
 
                     <div class="orders-table">
-                        <h3 style="margin: 30px 0 15px 0; color: #333;">📋 Active Orders</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 30px 0 15px 0;">
+                            <h3 style="margin: 0; color: #333;">📋 Active Orders</h3>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <label style="font-weight: 500;">Filter by Client:</label>
+                                <select id="clientFilter" onchange="filterOrdersByClient()" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 6px; font-size: 14px;">
+                                    <option value="">All Clients</option>
+                                </select>
+                            </div>
+                        </div>
                         <table id="ordersTable">
                             <thead>
                                 <tr>
@@ -922,7 +930,9 @@
                                     <th>Ship Date</th>
                                     <th>Mode</th>
                                     <th>Status</th>
+                                    <th>WMS Status</th>
                                     <th>SLA Status</th>
+                                    <th>Created At</th>
                                     <th>Days</th>
                                 </tr>
                             </thead>
@@ -1658,13 +1668,20 @@
                 document.getElementById('metricShippingWeek').textContent = data.metrics.shippingThisWeek;
                 document.getElementById('metricAvgDays').textContent = data.metrics.avgDaysInSystem;
 
-                // Update orders table
+                // Update orders table  
                 const tbody = document.getElementById('ordersTableBody');
                 tbody.innerHTML = '';
+                
+                // Store all orders for filtering
+                window.allOrders = data.orders || [];
+                
+                // Populate client filter dropdown
+                populateClientFilter(window.allOrders);
 
                 if (data.orders && data.orders.length > 0) {
                     data.orders.forEach(order => {
                         const row = tbody.insertRow();
+                        row.setAttribute('data-client', order.client);  // For filtering
                         
                         const priorityClass = order.clientPriority === 'High' ? 'priority-high' :
                                             order.clientPriority === 'Low' ? 'priority-low' : 'priority-normal';
@@ -1685,12 +1702,14 @@
                             <td>${order.requestedShipDate}</td>
                             <td>${order.requestedMode}</td>
                             <td><span class="${statusClass}">${order.status}</span></td>
+                            <td style="font-size: 0.9em;">${order.wmsStatus || 'N/A'}</td>
                             <td><span class="${slaClass}">${order.slaStatus}</span></td>
+                            <td style="font-size: 0.85em;">${order.createdAt}</td>
                             <td>${order.daysInSystem}</td>
                         `;
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
                 }
 
                 document.getElementById('dashboardLoading').style.display = 'none';
@@ -1702,6 +1721,37 @@
                 alert('Error loading dashboard data. Please make sure your Apps Script URL is configured.');
             }
         }
+
+        function populateClientFilter(orders) {
+            const clientFilter = document.getElementById('clientFilter');
+            const clients = [...new Set(orders.map(o => o.client))].sort();
+            
+            // Clear existing options except "All Clients"
+            clientFilter.innerHTML = '<option value="">All Clients</option>';
+            
+            clients.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client;
+                option.textContent = client;
+                clientFilter.appendChild(option);
+            });
+        }
+
+        function filterOrdersByClient() {
+            const selectedClient = document.getElementById('clientFilter').value;
+            const tbody = document.getElementById('ordersTableBody');
+            const rows = tbody.getElementsByTagName('tr');
+            
+            for (let row of rows) {
+                if (selectedClient === '') {
+                    row.style.display = '';  // Show all
+                } else {
+                    const clientCell = row.getAttribute('data-client');
+                    row.style.display = clientCell === selectedClient ? '' : 'none';
+                }
+            }
+        }
+
 
         // ====================================================================
         // REPORTS & ARCHIVE
