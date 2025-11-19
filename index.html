@@ -882,7 +882,15 @@
             <div id="ops-dashboard" class="tab-content">
                 <h2 style="margin-bottom: 20px; color: #667eea;">📊 Operations Dashboard</h2>
                 
-                <button class="btn btn-primary" style="margin-bottom: 20px;" onclick="refreshDashboard()">🔄 Refresh Dashboard</button>
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="refreshDashboard()">🔄 Refresh Dashboard</button>
+                    <button class="btn btn-success" onclick="runAutoArchive()">📦 Auto-Archive Shipped Orders</button>
+                </div>
+                
+                <div class="info-message" id="archiveInfo" style="display: none;">
+                    <h4>✅ Auto-Archive Complete</h4>
+                    <p id="archiveMessage"></p>
+                </div>
                 
                 <div class="loading" id="dashboardLoading">
                     <div class="spinner"></div>
@@ -945,6 +953,7 @@
                                     <th>Status</th>
                                     <th>WMS Status</th>
                                     <th>SLA Status</th>
+                                    <th>Notes</th>
                                     <th>Created At</th>
                                     <th>Days</th>
                                 </tr>
@@ -1717,12 +1726,13 @@
                             <td><span class="${statusClass}">${order.status}</span></td>
                             <td style="font-size: 0.9em;">${order.wmsStatus || 'N/A'}</td>
                             <td><span class="${slaClass}">${order.slaStatus}</span></td>
+                            <td style="font-size: 0.85em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${order.notes || ''}">${order.notes || ''}</td>
                             <td style="font-size: 0.85em;">${order.createdAt}</td>
                             <td>${order.daysInSystem}</td>
                         `;
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
                 }
 
                 document.getElementById('dashboardLoading').style.display = 'none';
@@ -1748,6 +1758,41 @@
                 option.textContent = client;
                 clientFilter.appendChild(option);
             });
+        }
+
+        async function runAutoArchive() {
+            if (!confirm('This will archive all orders that are NOT in the WMS aging report (orders that have been shipped). Continue?')) {
+                return;
+            }
+
+            document.getElementById('archiveInfo').style.display = 'none';
+            document.getElementById('dashboardLoading').style.display = 'block';
+
+            try {
+                const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?action=autoArchive`);
+                const result = await response.json();
+
+                document.getElementById('dashboardLoading').style.display = 'none';
+
+                if (result.success) {
+                    document.getElementById('archiveMessage').textContent = 
+                        `${result.message} - Archived ${result.archivedCount} order(s). Refreshing dashboard...`;
+                    document.getElementById('archiveInfo').style.display = 'block';
+
+                    // Auto-refresh dashboard after 2 seconds
+                    setTimeout(() => {
+                        refreshDashboard();
+                        document.getElementById('archiveInfo').style.display = 'none';
+                    }, 2000);
+                } else {
+                    alert('Error running auto-archive: ' + (result.message || 'Unknown error'));
+                }
+
+            } catch (error) {
+                console.error('Auto-archive error:', error);
+                document.getElementById('dashboardLoading').style.display = 'none';
+                alert('Error running auto-archive. Please try again.');
+            }
         }
 
         function filterOrdersByClient() {
