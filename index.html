@@ -956,6 +956,7 @@
                                     <th>Notes</th>
                                     <th>Created At</th>
                                     <th>Days</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="ordersTableBody">
@@ -965,6 +966,88 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- Edit Order Modal -->
+            <div id="editOrderModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; overflow-y: auto;">
+                <div style="background: white; max-width: 800px; margin: 50px auto; padding: 30px; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">✏️ Edit Order</h2>
+                    
+                    <form id="editOrderForm">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Order Number (Read-only)</label>
+                                <input type="text" id="editOrderNumber" readonly style="background: #e9ecef;">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Client (Read-only)</label>
+                                <input type="text" id="editClient" readonly style="background: #e9ecef;">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="required">Client Priority</label>
+                                <select id="editClientPriority" required>
+                                    <option value="High">🔴 High</option>
+                                    <option value="Normal">🟡 Normal</option>
+                                    <option value="Low">🟢 Low</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="required">Retailer</label>
+                                <input type="text" id="editRetailer" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>PO Number</label>
+                                <input type="text" id="editPO">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="required">Requires Dims?</label>
+                                <select id="editRequiresDims" required onchange="toggleEditDimsDue()">
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" id="editDimsDueGroup">
+                                <label>Dims Due By</label>
+                                <input type="date" id="editDimsDueBy">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="required">Requested Ship Date</label>
+                                <input type="date" id="editRequestedShipDate" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="required">Requested Mode</label>
+                                <select id="editRequestedMode" required>
+                                    <option value="">Select mode...</option>
+                                    <option value="LTL">LTL</option>
+                                    <option value="Small Parcel">Small Parcel</option>
+                                    <option value="TBD">TBD</option>
+                                    <option value="Rate Shopping">Rate Shopping</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label>Notes</label>
+                                <textarea id="editNotes" rows="3" style="width: 100%;"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="button-group" style="margin-top: 20px;">
+                            <button type="button" class="btn btn-primary" onclick="saveOrderEdit()">💾 Save Changes</button>
+                            <button type="button" class="btn btn-secondary" onclick="closeEditModal()">❌ Cancel</button>
+                        </div>
+                    </form>
+
+                    <div class="success-message" id="editSuccess" style="display: none; margin-top: 15px;"></div>
+                    <div class="error-message" id="editError" style="display: none; margin-top: 15px;"></div>
                 </div>
             </div>
 
@@ -1714,6 +1797,20 @@
                         const slaClass = order.slaStatus === 'On Time' ? 'sla-on-time' :
                                        order.slaStatus === 'At Risk' ? 'sla-at-risk' : 'sla-overdue';
                         
+                        // Store order data as JSON attribute for editing
+                        const orderData = JSON.stringify({
+                            orderNumber: order.orderNumber,
+                            client: order.client,
+                            clientPriority: order.clientPriority,
+                            retailer: order.retailer,
+                            po: order.po,
+                            requiresDims: order.requiresDims,
+                            dimsDueBy: order.dimsDueBy,
+                            requestedShipDate: order.requestedShipDate,
+                            requestedMode: order.requestedMode,
+                            notes: order.notes
+                        }).replace(/"/g, '&quot;');
+                        
                         row.innerHTML = `
                             <td><span class="${priorityClass}">${order.clientPriority}</span></td>
                             <td>${order.client}</td>
@@ -1729,10 +1826,11 @@
                             <td style="font-size: 0.85em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${order.notes || ''}">${order.notes || ''}</td>
                             <td style="font-size: 0.85em;">${order.createdAt}</td>
                             <td>${order.daysInSystem}</td>
+                            <td><button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85em;" onclick='editOrder(${orderData})'>✏️ Edit</button></td>
                         `;
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="15" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
                 }
 
                 document.getElementById('dashboardLoading').style.display = 'none';
@@ -1775,15 +1873,27 @@
                 document.getElementById('dashboardLoading').style.display = 'none';
 
                 if (result.success) {
-                    document.getElementById('archiveMessage').textContent = 
-                        `${result.message} - Archived ${result.archivedCount} order(s). Refreshing dashboard...`;
+                    let message = `${result.message} - Archived ${result.archivedCount} order(s).`;
+                    
+                    if (result.debug) {
+                        message += `\n\nDebug Info:\n`;
+                        message += `- Orders in Aging_Import: ${result.debug.totalInAgingImport}\n`;
+                        message += `- Orders in Ship_Requests: ${result.debug.totalInShipRequests}\n`;
+                        message += `- Active in WMS: ${result.debug.activeInWMS}`;
+                    }
+                    
+                    if (result.archivedOrders && result.archivedOrders.length > 0) {
+                        message += `\n\nArchived: ${result.archivedOrders.join(', ')}`;
+                    }
+                    
+                    document.getElementById('archiveMessage').innerHTML = message.replace(/\n/g, '<br>');
                     document.getElementById('archiveInfo').style.display = 'block';
 
-                    // Auto-refresh dashboard after 2 seconds
+                    // Auto-refresh dashboard after 3 seconds
                     setTimeout(() => {
                         refreshDashboard();
                         document.getElementById('archiveInfo').style.display = 'none';
-                    }, 2000);
+                    }, 3000);
                 } else {
                     alert('Error running auto-archive: ' + (result.message || 'Unknown error'));
                 }
@@ -1807,6 +1917,104 @@
                     const clientCell = row.getAttribute('data-client');
                     row.style.display = clientCell === selectedClient ? '' : 'none';
                 }
+            }
+        }
+
+        // ====================================================================
+        // EDIT ORDER FUNCTIONS
+        // ====================================================================
+
+        function editOrder(orderData) {
+            // Populate form with current order data
+            document.getElementById('editOrderNumber').value = orderData.orderNumber;
+            document.getElementById('editClient').value = orderData.client;
+            document.getElementById('editClientPriority').value = orderData.clientPriority;
+            document.getElementById('editRetailer').value = orderData.retailer;
+            document.getElementById('editPO').value = orderData.po || '';
+            document.getElementById('editRequiresDims').value = orderData.requiresDims;
+            document.getElementById('editDimsDueBy').value = orderData.dimsDueBy ? formatDateForInput(orderData.dimsDueBy) : '';
+            document.getElementById('editRequestedShipDate').value = orderData.requestedShipDate ? formatDateForInput(orderData.requestedShipDate) : '';
+            document.getElementById('editRequestedMode').value = orderData.requestedMode;
+            document.getElementById('editNotes').value = orderData.notes || '';
+
+            // Show/hide dims due field
+            toggleEditDimsDue();
+
+            // Show modal
+            document.getElementById('editOrderModal').style.display = 'block';
+            document.getElementById('editSuccess').style.display = 'none';
+            document.getElementById('editError').style.display = 'none';
+        }
+
+        function formatDateForInput(dateString) {
+            // Convert MM-DD-YYYY to YYYY-MM-DD for input[type=date]
+            if (!dateString) return '';
+            const parts = dateString.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}-${parts[0]}-${parts[1]}`;
+            }
+            return dateString;
+        }
+
+        function toggleEditDimsDue() {
+            const requiresDims = document.getElementById('editRequiresDims').value;
+            const dimsDueGroup = document.getElementById('editDimsDueGroup');
+            
+            if (requiresDims === 'Yes') {
+                dimsDueGroup.style.display = 'block';
+            } else {
+                dimsDueGroup.style.display = 'none';
+                document.getElementById('editDimsDueBy').value = '';
+            }
+        }
+
+        function closeEditModal() {
+            document.getElementById('editOrderModal').style.display = 'none';
+        }
+
+        async function saveOrderEdit() {
+            document.getElementById('editSuccess').style.display = 'none';
+            document.getElementById('editError').style.display = 'none';
+
+            const orderData = {
+                action: 'updateOrder',
+                orderNumber: document.getElementById('editOrderNumber').value,
+                clientPriority: document.getElementById('editClientPriority').value,
+                retailer: document.getElementById('editRetailer').value,
+                po: document.getElementById('editPO').value,
+                requiresDims: document.getElementById('editRequiresDims').value,
+                dimsDueBy: document.getElementById('editDimsDueBy').value,
+                requestedShipDate: document.getElementById('editRequestedShipDate').value,
+                requestedMode: document.getElementById('editRequestedMode').value,
+                notes: document.getElementById('editNotes').value
+            };
+
+            try {
+                const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('editSuccess').innerHTML = '<strong>✅ Success!</strong> Order updated successfully.';
+                    document.getElementById('editSuccess').style.display = 'block';
+
+                    // Close modal and refresh dashboard after 1 second
+                    setTimeout(() => {
+                        closeEditModal();
+                        refreshDashboard();
+                    }, 1000);
+                } else {
+                    document.getElementById('editError').innerHTML = '<strong>❌ Error:</strong> ' + (result.message || 'Failed to update order');
+                    document.getElementById('editError').style.display = 'block';
+                }
+
+            } catch (error) {
+                console.error('Error updating order:', error);
+                document.getElementById('editError').innerHTML = '<strong>❌ Error:</strong> Failed to update order. Please try again.';
+                document.getElementById('editError').style.display = 'block';
             }
         }
 
