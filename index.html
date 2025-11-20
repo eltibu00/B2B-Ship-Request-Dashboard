@@ -932,11 +932,24 @@
                     <div class="orders-table">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin: 30px 0 15px 0;">
                             <h3 style="margin: 0; color: #333;">📋 Active Orders</h3>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <label style="font-weight: 500;">Filter by Client:</label>
-                                <select id="clientFilter" onchange="filterOrdersByClient()" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 6px; font-size: 14px;">
-                                    <option value="">All Clients</option>
-                                </select>
+                            <div style="display: flex; gap: 15px; align-items: center;">
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <label style="font-weight: 500;">Sort by:</label>
+                                    <select id="sortOrder" onchange="sortOrders()" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 6px; font-size: 14px;">
+                                        <option value="priority">Priority → Date</option>
+                                        <option value="shipDate">Ship Date (Earliest First)</option>
+                                        <option value="dimsDate">Dims Due (Earliest First)</option>
+                                        <option value="createdDate">Created Date (Newest First)</option>
+                                        <option value="client">Client (A-Z)</option>
+                                        <option value="orderNumber">Order Number</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <label style="font-weight: 500;">Filter by Client:</label>
+                                    <select id="clientFilter" onchange="filterOrdersByClient()" style="padding: 8px 12px; border: 2px solid #667eea; border-radius: 6px; font-size: 14px;">
+                                        <option value="">All Clients</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <table id="ordersTable">
@@ -2016,6 +2029,124 @@
                 document.getElementById('editError').innerHTML = '<strong>❌ Error:</strong> Failed to update order. Please try again.';
                 document.getElementById('editError').style.display = 'block';
             }
+        }
+
+        function sortOrders() {
+            const sortBy = document.getElementById('sortOrder').value;
+            
+            if (!window.allOrders || window.allOrders.length === 0) return;
+            
+            let sortedOrders = [...window.allOrders];
+            
+            switch(sortBy) {
+                case 'priority':
+                    // Priority first, then by dims/ship date
+                    sortedOrders.sort((a, b) => {
+                        const priorityOrder = { 'High': 0, 'Normal': 1, 'Low': 2 };
+                        const priorityDiff = priorityOrder[a.clientPriority] - priorityOrder[b.clientPriority];
+                        if (priorityDiff !== 0) return priorityDiff;
+                        
+                        const dateA = new Date(a.dimsDueBy || a.requestedShipDate);
+                        const dateB = new Date(b.dimsDueBy || b.requestedShipDate);
+                        return dateA - dateB;
+                    });
+                    break;
+                    
+                case 'shipDate':
+                    // Earliest ship date first
+                    sortedOrders.sort((a, b) => {
+                        const dateA = new Date(a.requestedShipDate);
+                        const dateB = new Date(b.requestedShipDate);
+                        return dateA - dateB;
+                    });
+                    break;
+                    
+                case 'dimsDate':
+                    // Earliest dims due first (nulls last)
+                    sortedOrders.sort((a, b) => {
+                        if (!a.dimsDueBy) return 1;
+                        if (!b.dimsDueBy) return -1;
+                        const dateA = new Date(a.dimsDueBy);
+                        const dateB = new Date(b.dimsDueBy);
+                        return dateA - dateB;
+                    });
+                    break;
+                    
+                case 'createdDate':
+                    // Newest first
+                    sortedOrders.sort((a, b) => {
+                        const dateA = new Date(a.createdAt);
+                        const dateB = new Date(b.createdAt);
+                        return dateB - dateA;  // Reverse for newest first
+                    });
+                    break;
+                    
+                case 'client':
+                    // Alphabetical by client
+                    sortedOrders.sort((a, b) => a.client.localeCompare(b.client));
+                    break;
+                    
+                case 'orderNumber':
+                    // By order number
+                    sortedOrders.sort((a, b) => {
+                        const numA = parseInt(a.orderNumber) || 0;
+                        const numB = parseInt(b.orderNumber) || 0;
+                        return numA - numB;
+                    });
+                    break;
+            }
+            
+            // Rebuild table with sorted orders
+            const tbody = document.getElementById('ordersTableBody');
+            tbody.innerHTML = '';
+            
+            sortedOrders.forEach(order => {
+                const row = tbody.insertRow();
+                row.setAttribute('data-client', order.client);
+                
+                const priorityClass = order.clientPriority === 'High' ? 'priority-high' :
+                                    order.clientPriority === 'Low' ? 'priority-low' : 'priority-normal';
+                
+                const statusClass = order.status === 'New' ? 'status-new' :
+                                  order.status === 'Dims Entered' ? 'status-dims-entered' : 'status-shipped';
+                
+                const slaClass = order.slaStatus === 'On Time' ? 'sla-on-time' :
+                               order.slaStatus === 'At Risk' ? 'sla-at-risk' : 'sla-overdue';
+                
+                const orderData = JSON.stringify({
+                    orderNumber: order.orderNumber,
+                    client: order.client,
+                    clientPriority: order.clientPriority,
+                    retailer: order.retailer,
+                    po: order.po,
+                    requiresDims: order.requiresDims,
+                    dimsDueBy: order.dimsDueBy,
+                    requestedShipDate: order.requestedShipDate,
+                    requestedMode: order.requestedMode,
+                    notes: order.notes
+                }).replace(/"/g, '&quot;');
+                
+                row.innerHTML = `
+                    <td><span class="${priorityClass}">${order.clientPriority}</span></td>
+                    <td>${order.client}</td>
+                    <td>${order.orderNumber}</td>
+                    <td>${order.retailer}</td>
+                    <td>${order.po || 'N/A'}</td>
+                    <td>${order.dimsDueBy || 'N/A'}</td>
+                    <td>${order.requestedShipDate}</td>
+                    <td>${order.requestedMode}</td>
+                    <td><span class="${statusClass}">${order.status}</span></td>
+                    <td style="font-size: 0.9em;">${order.wmsStatus || 'N/A'}</td>
+                    <td><span class="${slaClass}">${order.slaStatus}</span></td>
+                    <td style="font-size: 0.85em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${order.notes || ''}">${order.notes || ''}</td>
+                    <td style="font-size: 0.85em;">${order.createdAt}</td>
+                    <td>${order.daysInSystem}</td>
+                    <td><button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85em;" onclick='editOrder(${orderData})'>✏️ Edit</button></td>
+                `;
+            });
+            
+            // Reapply client filter if active
+            filterOrdersByClient();
         }
 
 
