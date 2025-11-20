@@ -2208,15 +2208,290 @@
         }
 
         function generateSLAReport() {
-            alert('SLA Compliance Report\n\nThis feature will generate a detailed SLA compliance report showing:\n- On-time delivery rate\n- At-risk orders\n- Overdue orders\n- By client breakdown\n\nComing soon!');
+            if (!window.allOrders || window.allOrders.length === 0) {
+                alert('No active orders to generate report. Please refresh the Operations Dashboard first.');
+                return;
+            }
+
+            const orders = window.allOrders;
+            const onTime = orders.filter(o => o.slaStatus === 'On Time').length;
+            const atRisk = orders.filter(o => o.slaStatus === 'At Risk').length;
+            const overdue = orders.filter(o => o.slaStatus === 'Overdue').length;
+            const total = orders.length;
+
+            const onTimePercent = ((onTime / total) * 100).toFixed(1);
+            const atRiskPercent = ((atRisk / total) * 100).toFixed(1);
+            const overduePercent = ((overdue / total) * 100).toFixed(1);
+
+            // Group by client
+            const clientBreakdown = {};
+            orders.forEach(order => {
+                if (!clientBreakdown[order.client]) {
+                    clientBreakdown[order.client] = { onTime: 0, atRisk: 0, overdue: 0, total: 0 };
+                }
+                clientBreakdown[order.client].total++;
+                if (order.slaStatus === 'On Time') clientBreakdown[order.client].onTime++;
+                else if (order.slaStatus === 'At Risk') clientBreakdown[order.client].atRisk++;
+                else if (order.slaStatus === 'Overdue') clientBreakdown[order.client].overdue++;
+            });
+
+            let reportHTML = `
+                <div style="background: white; padding: 30px; border-radius: 10px; margin-top: 20px;">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">📊 SLA Compliance Report</h2>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px;">
+                        <div style="background: #d4edda; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h3 style="color: #155724; margin: 0;">On Time</h3>
+                            <div style="font-size: 3em; font-weight: bold; color: #155724;">${onTime}</div>
+                            <div style="font-size: 1.2em; color: #155724;">${onTimePercent}%</div>
+                        </div>
+                        <div style="background: #fff3cd; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h3 style="color: #856404; margin: 0;">At Risk</h3>
+                            <div style="font-size: 3em; font-weight: bold; color: #856404;">${atRisk}</div>
+                            <div style="font-size: 1.2em; color: #856404;">${atRiskPercent}%</div>
+                        </div>
+                        <div style="background: #f8d7da; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h3 style="color: #721c24; margin: 0;">Overdue</h3>
+                            <div style="font-size: 3em; font-weight: bold; color: #721c24;">${overdue}</div>
+                            <div style="font-size: 1.2em; color: #721c24;">${overduePercent}%</div>
+                        </div>
+                    </div>
+
+                    <h3 style="color: #667eea; margin-bottom: 15px;">By Client Breakdown</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <th style="padding: 12px; text-align: left;">Client</th>
+                                <th style="padding: 12px; text-align: center;">Total</th>
+                                <th style="padding: 12px; text-align: center;">On Time</th>
+                                <th style="padding: 12px; text-align: center;">At Risk</th>
+                                <th style="padding: 12px; text-align: center;">Overdue</th>
+                                <th style="padding: 12px; text-align: center;">Success Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            Object.keys(clientBreakdown).sort().forEach(client => {
+                const data = clientBreakdown[client];
+                const successRate = ((data.onTime / data.total) * 100).toFixed(1);
+                reportHTML += `
+                    <tr style="border-bottom: 1px solid #e0e0e0;">
+                        <td style="padding: 12px;">${client}</td>
+                        <td style="padding: 12px; text-align: center;">${data.total}</td>
+                        <td style="padding: 12px; text-align: center; color: #155724; font-weight: bold;">${data.onTime}</td>
+                        <td style="padding: 12px; text-align: center; color: #856404; font-weight: bold;">${data.atRisk}</td>
+                        <td style="padding: 12px; text-align: center; color: #721c24; font-weight: bold;">${data.overdue}</td>
+                        <td style="padding: 12px; text-align: center; font-weight: bold;">${successRate}%</td>
+                    </tr>`;
+            });
+
+            reportHTML += `
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button class="btn btn-secondary" onclick="closeReport()">Close</button>
+                    </div>
+                </div>`;
+
+            showReportModal(reportHTML);
         }
 
         function generateAgingReport() {
-            alert('Aging Report\n\nThis feature will generate an aging report showing:\n- Orders by age brackets (0-2, 3-5, 6-10, 10+ days)\n- Average time in system\n- Oldest pending orders\n\nComing soon!');
+            if (!window.allOrders || window.allOrders.length === 0) {
+                alert('No active orders to generate report. Please refresh the Operations Dashboard first.');
+                return;
+            }
+
+            const orders = window.allOrders;
+            
+            // Age brackets
+            const brackets = {
+                '0-2 days': orders.filter(o => o.daysInSystem >= 0 && o.daysInSystem <= 2),
+                '3-5 days': orders.filter(o => o.daysInSystem >= 3 && o.daysInSystem <= 5),
+                '6-10 days': orders.filter(o => o.daysInSystem >= 6 && o.daysInSystem <= 10),
+                '10+ days': orders.filter(o => o.daysInSystem > 10)
+            };
+
+            const avgDays = (orders.reduce((sum, o) => sum + o.daysInSystem, 0) / orders.length).toFixed(1);
+            const oldest = [...orders].sort((a, b) => b.daysInSystem - a.daysInSystem).slice(0, 5);
+
+            let reportHTML = `
+                <div style="background: white; padding: 30px; border-radius: 10px; margin-top: 20px;">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">⏱️ Aging Report</h2>
+                    
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: center;">
+                        <h3 style="color: #667eea; margin: 0;">Average Days in System</h3>
+                        <div style="font-size: 4em; font-weight: bold; color: #667eea;">${avgDays}</div>
+                        <div style="color: #666;">days</div>
+                    </div>
+
+                    <h3 style="color: #667eea; margin-bottom: 15px;">Orders by Age Bracket</h3>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px;">`;
+
+            Object.keys(brackets).forEach(bracket => {
+                const count = brackets[bracket].length;
+                const percent = ((count / orders.length) * 100).toFixed(1);
+                reportHTML += `
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; border: 2px solid #667eea;">
+                        <h4 style="color: #667eea; margin: 0 0 10px 0;">${bracket}</h4>
+                        <div style="font-size: 2.5em; font-weight: bold; color: #333;">${count}</div>
+                        <div style="color: #666;">${percent}% of orders</div>
+                    </div>`;
+            });
+
+            reportHTML += `
+                    </div>
+
+                    <h3 style="color: #667eea; margin-bottom: 15px;">Top 5 Oldest Pending Orders</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <th style="padding: 12px; text-align: left;">Order #</th>
+                                <th style="padding: 12px; text-align: left;">Client</th>
+                                <th style="padding: 12px; text-align: center;">Days in System</th>
+                                <th style="padding: 12px; text-align: center;">Status</th>
+                                <th style="padding: 12px; text-align: center;">Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            oldest.forEach(order => {
+                reportHTML += `
+                    <tr style="border-bottom: 1px solid #e0e0e0;">
+                        <td style="padding: 12px;">${order.orderNumber}</td>
+                        <td style="padding: 12px;">${order.client}</td>
+                        <td style="padding: 12px; text-align: center; font-weight: bold; color: #721c24;">${order.daysInSystem}</td>
+                        <td style="padding: 12px; text-align: center;">${order.status}</td>
+                        <td style="padding: 12px; text-align: center;">${order.clientPriority}</td>
+                    </tr>`;
+            });
+
+            reportHTML += `
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button class="btn btn-secondary" onclick="closeReport()">Close</button>
+                    </div>
+                </div>`;
+
+            showReportModal(reportHTML);
         }
 
         function generateClientReport() {
-            alert('Client Performance Report\n\nThis feature will generate a client performance report showing:\n- Orders by client\n- Average turnaround time\n- SLA compliance percentage\n- Priority distribution\n\nComing soon!');
+            if (!window.allOrders || window.allOrders.length === 0) {
+                alert('No active orders to generate report. Please refresh the Operations Dashboard first.');
+                return;
+            }
+
+            const orders = window.allOrders;
+            
+            // Group by client
+            const clientStats = {};
+            orders.forEach(order => {
+                if (!clientStats[order.client]) {
+                    clientStats[order.client] = {
+                        total: 0,
+                        high: 0,
+                        normal: 0,
+                        low: 0,
+                        avgDays: 0,
+                        onTime: 0,
+                        totalDays: 0
+                    };
+                }
+                const stats = clientStats[order.client];
+                stats.total++;
+                stats.totalDays += order.daysInSystem;
+                if (order.clientPriority === 'High') stats.high++;
+                else if (order.clientPriority === 'Normal') stats.normal++;
+                else stats.low++;
+                if (order.slaStatus === 'On Time') stats.onTime++;
+            });
+
+            // Calculate averages
+            Object.keys(clientStats).forEach(client => {
+                clientStats[client].avgDays = (clientStats[client].totalDays / clientStats[client].total).toFixed(1);
+                clientStats[client].slaPercent = ((clientStats[client].onTime / clientStats[client].total) * 100).toFixed(1);
+            });
+
+            let reportHTML = `
+                <div style="background: white; padding: 30px; border-radius: 10px; margin-top: 20px;">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">👥 Client Performance Report</h2>
+                    
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <th style="padding: 12px; text-align: left;">Client</th>
+                                <th style="padding: 12px; text-align: center;">Total Orders</th>
+                                <th style="padding: 12px; text-align: center;">High Priority</th>
+                                <th style="padding: 12px; text-align: center;">Avg Days</th>
+                                <th style="padding: 12px; text-align: center;">SLA Success</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            Object.keys(clientStats).sort((a, b) => clientStats[b].total - clientStats[a].total).forEach(client => {
+                const stats = clientStats[client];
+                const slaColor = stats.slaPercent >= 90 ? '#155724' : stats.slaPercent >= 70 ? '#856404' : '#721c24';
+                reportHTML += `
+                    <tr style="border-bottom: 1px solid #e0e0e0;">
+                        <td style="padding: 12px; font-weight: bold;">${client}</td>
+                        <td style="padding: 12px; text-align: center;">${stats.total}</td>
+                        <td style="padding: 12px; text-align: center; color: #e74c3c; font-weight: bold;">${stats.high}</td>
+                        <td style="padding: 12px; text-align: center;">${stats.avgDays} days</td>
+                        <td style="padding: 12px; text-align: center; font-weight: bold; color: ${slaColor};">${stats.slaPercent}%</td>
+                    </tr>`;
+            });
+
+            reportHTML += `
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 30px; background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                        <h4 style="color: #667eea;">Priority Distribution Across All Clients</h4>
+                        <div style="display: flex; gap: 20px; margin-top: 15px;">
+                            <div style="flex: 1; text-align: center;">
+                                <div style="color: #e74c3c; font-size: 2em; font-weight: bold;">
+                                    ${orders.filter(o => o.clientPriority === 'High').length}
+                                </div>
+                                <div>High Priority</div>
+                            </div>
+                            <div style="flex: 1; text-align: center;">
+                                <div style="color: #f39c12; font-size: 2em; font-weight: bold;">
+                                    ${orders.filter(o => o.clientPriority === 'Normal').length}
+                                </div>
+                                <div>Normal Priority</div>
+                            </div>
+                            <div style="flex: 1; text-align: center;">
+                                <div style="color: #27ae60; font-size: 2em; font-weight: bold;">
+                                    ${orders.filter(o => o.clientPriority === 'Low').length}
+                                </div>
+                                <div>Low Priority</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button class="btn btn-secondary" onclick="closeReport()">Close</button>
+                    </div>
+                </div>`;
+
+            showReportModal(reportHTML);
+        }
+
+        function showReportModal(htmlContent) {
+            let modal = document.getElementById('reportModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'reportModal';
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; overflow-y: auto; padding: 20px;';
+                document.body.appendChild(modal);
+            }
+            modal.innerHTML = htmlContent;
+            modal.style.display = 'block';
+        }
+
+        function closeReport() {
+            const modal = document.getElementById('reportModal');
+            if (modal) modal.style.display = 'none';
         }
 
         // ====================================================================
