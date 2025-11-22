@@ -2599,6 +2599,9 @@
                                        </div>` 
                                     : '';
                                 
+                                // Format timestamp
+                                const timestamp = pallet.updatedAt ? formatTimestamp(pallet.updatedAt) : 'N/A';
+                                
                                 return `
                                 <div style="background: white; padding: 15px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid ${qty > 1 ? '#667eea' : '#e0e0e0'};">
                                     <div style="margin-bottom: ${qty > 1 ? '10px' : '0'};">
@@ -2612,6 +2615,7 @@
                                         <div><strong>Cube:</strong> ${pallet.cubeFt} ft³ ${qty > 1 ? `(${(parseFloat(pallet.cubeFt) * qty).toFixed(2)} ft³ total)` : ''}</div>
                                         <div><strong>Footprint:</strong> ${pallet.footprint}</div>
                                         <div><strong>Entered by:</strong> ${pallet.updatedBy}</div>
+                                        <div style="grid-column: 1 / -1;"><strong>⏰ Entered at:</strong> ${timestamp}</div>
                                     </div>
                                 </div>
                             `}).join('')}
@@ -2627,6 +2631,28 @@
             });
 
             container.innerHTML = html;
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            
+            try {
+                const date = new Date(timestamp);
+                
+                // Format as: MM/DD/YYYY - HH:MM AM/PM
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const year = date.getFullYear();
+                
+                let hours = date.getHours();
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12 || 12;
+                
+                return `${month}/${day}/${year} - ${hours}:${minutes} ${ampm}`;
+            } catch (error) {
+                return 'Invalid date';
+            }
         }
 
         function togglePalletDetails(index) {
@@ -2654,10 +2680,12 @@
                 }
                 
                 // Build CSV content
-                let csv = 'Order Number,Client,Priority,Retailer,PO,Ship Date,Mode,Status,Pallet #,Pallet Type,Length,Width,Height,Weight,Cartons,Quantity,Footprint,Cube Ft³,Entered By\n';
+                let csv = 'Order Number,Client,Priority,Retailer,PO,Ship Date,Mode,Status,Pallet #,Pallet Type,Length,Width,Height,Weight,Cartons,Quantity,Footprint,Cube Ft³,Entered By,Entered At\n';
                 
                 data.orders.forEach(order => {
                     order.pallets.forEach(pallet => {
+                        const timestamp = pallet.updatedAt ? formatTimestamp(pallet.updatedAt) : 'N/A';
+                        
                         csv += `"${order.orderNumber}",`;
                         csv += `"${order.client}",`;
                         csv += `"${order.clientPriority}",`;
@@ -2676,7 +2704,8 @@
                         csv += `${pallet.quantity || 1},`;
                         csv += `"${pallet.footprint}",`;
                         csv += `${pallet.cubeFt},`;
-                        csv += `"${pallet.updatedBy}"\n`;
+                        csv += `"${pallet.updatedBy}",`;
+                        csv += `"${timestamp}"\n`;
                     });
                 });
                 
