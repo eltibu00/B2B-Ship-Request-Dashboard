@@ -835,10 +835,16 @@
                                 <label class="required">Carton Count</label>
                                 <input type="number" id="cartonCount" required min="1" step="1" placeholder="50">
                             </div>
+
+                            <div class="form-group">
+                                <label class="required">Quantity</label>
+                                <input type="number" id="palletQuantity" required min="1" max="100" step="1" value="1" placeholder="1">
+                                <small style="color: #666; margin-top: 5px;">How many identical pallets? (Creates 1 record)</small>
+                            </div>
                         </div>
 
                         <div class="button-group">
-                            <button type="button" class="btn btn-success" onclick="addPallet()">➕ Add Pallet</button>
+                            <button type="button" class="btn btn-success" onclick="addPallet()">➕ Add Pallet(s)</button>
                             <button type="button" class="btn btn-primary" onclick="submitAllDims()">✅ Submit All Dims</button>
                             <button type="button" class="btn btn-secondary" onclick="clearDimsForm()">🔄 Clear</button>
                         </div>
@@ -865,7 +871,6 @@
 
                 <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="loadOrdersWithDims()">🔄 Refresh</button>
-                    <button class="btn btn-success" onclick="openDimsSheet()">📊 Open Dimensions Sheet (Backend)</button>
                 </div>
                 
                 <div class="loading" id="dimsViewLoading">
@@ -1571,17 +1576,20 @@
         }
 
         // ====================================================================
-        // DIMS ENTRY
+        // DIMS ENTRY - UPDATED WITH QUANTITY FEATURE
         // ====================================================================
 
         function addPallet() {
+            const quantity = parseInt(document.getElementById('palletQuantity').value) || 1;
+            
             const palletData = {
                 type: document.getElementById('palletType').value,
                 length: parseFloat(document.getElementById('palletLength').value),
                 width: parseFloat(document.getElementById('palletWidth').value),
                 height: parseFloat(document.getElementById('palletHeight').value),
                 weight: parseFloat(document.getElementById('palletWeight').value),
-                cartonCount: parseInt(document.getElementById('cartonCount').value)
+                cartonCount: parseInt(document.getElementById('cartonCount').value),
+                quantity: quantity  // Store quantity as a field
             };
 
             if (!palletData.type || !palletData.length || !palletData.width || !palletData.height || !palletData.weight || !palletData.cartonCount) {
@@ -1589,12 +1597,25 @@
                 return;
             }
 
+            if (quantity < 1 || quantity > 100) {
+                alert('Quantity must be between 1 and 100');
+                return;
+            }
+
             const cubeFt = (palletData.length * palletData.width * palletData.height / 1728).toFixed(2);
             palletData.cubeFt = cubeFt;
 
+            // Add as single pallet record with quantity
             palletsToSubmit.push(palletData);
+
             updatePalletList();
             clearDimsInputs();
+            
+            // Show success message
+            const msg = quantity > 1 
+                ? `✅ Added pallet record for ${quantity} identical pallets!` 
+                : `✅ Added pallet successfully!`;
+            alert(msg);
         }
 
         function updatePalletList() {
@@ -1605,12 +1626,15 @@
                 return;
             }
 
-            let html = '<h4 style="margin-bottom: 10px;">Pallets to Submit:</h4>';
+            const totalPallets = palletsToSubmit.reduce((sum, p) => sum + (p.quantity || 1), 0);
+            let html = `<h4 style="margin-bottom: 10px;">Pallets to Submit: (${palletsToSubmit.length} record${palletsToSubmit.length > 1 ? 's' : ''}, ${totalPallets} total pallet${totalPallets > 1 ? 's' : ''})</h4>`;
+            
             palletsToSubmit.forEach((pallet, index) => {
+                const qtyDisplay = pallet.quantity > 1 ? ` <strong style="color: #667eea;">x${pallet.quantity} pallets</strong>` : '';
                 html += `
                     <div class="pallet-item">
                         <div>
-                            <strong>Pallet ${index + 1}:</strong> ${pallet.type} | 
+                            <strong>Record ${index + 1}:</strong> ${pallet.type}${qtyDisplay} | 
                             ${pallet.length}x${pallet.width}x${pallet.height}" | 
                             ${pallet.weight} lbs | ${pallet.cartonCount} cartons | ${pallet.cubeFt} ft³
                         </div>
@@ -1643,7 +1667,7 @@
             document.getElementById('dimsError').style.display = 'none';
 
             try {
-                // Submit each pallet
+                // Submit each pallet record (with quantity field)
                 for (const pallet of palletsToSubmit) {
                     const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
                         method: 'POST',
@@ -1656,6 +1680,7 @@
                             height: pallet.height,
                             weight: pallet.weight,
                             cartonCount: pallet.cartonCount,
+                            quantity: pallet.quantity || 1,  // Include quantity field
                             updatedBy: currentUser.name
                         })
                     });
@@ -1667,9 +1692,10 @@
                     }
                 }
 
+                const totalPallets = palletsToSubmit.reduce((sum, p) => sum + (p.quantity || 1), 0);
                 document.getElementById('dimsLoading').style.display = 'none';
                 document.getElementById('dimsSuccess').innerHTML = 
-                    `<strong>✅ Success!</strong> Saved ${palletsToSubmit.length} pallet(s) for order ${currentOrderForDims.orderNumber}`;
+                    `<strong>✅ Success!</strong> Saved ${palletsToSubmit.length} pallet record${palletsToSubmit.length > 1 ? 's' : ''} (${totalPallets} total pallet${totalPallets > 1 ? 's' : ''}) for order ${currentOrderForDims.orderNumber}`;
                 document.getElementById('dimsSuccess').style.display = 'block';
 
                 // Clear form
@@ -1697,6 +1723,7 @@
             document.getElementById('palletHeight').value = '';
             document.getElementById('palletWeight').value = '';
             document.getElementById('cartonCount').value = '';
+            document.getElementById('palletQuantity').value = '1'; // Reset to 1
         }
 
         function clearDimsForm() {
@@ -2601,12 +2628,6 @@
                 detailsDiv.style.display = 'none';
                 btn.innerHTML = '📦 View Pallet Details ▼';
             }
-        }
-
-        function openDimsSheet() {
-            const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SPREADSHEET_ID}/edit`;
-            window.open(url, '_blank');
-            alert('Opening Google Sheets in new tab. Look for the "Order_Dims" tab at the bottom.');
         }
 
     </script>
