@@ -871,6 +871,7 @@
 
                 <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="loadOrdersWithDims()">🔄 Refresh</button>
+                    <button class="btn btn-success" onclick="exportDimsToExcel()">📊 Export to Excel</button>
                 </div>
                 
                 <div class="loading" id="dimsViewLoading">
@@ -2590,19 +2591,30 @@
                         </button>
 
                         <div id="palletDetails${index}" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                            ${order.pallets.map((pallet, pIndex) => `
-                                <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #667eea;">
-                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 0.95em;">
-                                        <div><strong>Pallet ${pallet.palletNumber}:</strong> ${pallet.palletType}</div>
+                            ${order.pallets.map((pallet, pIndex) => {
+                                const qty = pallet.quantity || 1;
+                                const qtyDisplay = qty > 1 
+                                    ? `<div style="background: #667eea; color: white; padding: 8px 16px; border-radius: 6px; font-weight: bold; display: inline-block; margin-bottom: 8px;">
+                                         📦 Quantity: ${qty} identical pallets
+                                       </div>` 
+                                    : '';
+                                
+                                return `
+                                <div style="background: white; padding: 15px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid ${qty > 1 ? '#667eea' : '#e0e0e0'};">
+                                    <div style="margin-bottom: ${qty > 1 ? '10px' : '0'};">
+                                        <strong style="font-size: 1.1em; color: #333;">Pallet ${pallet.palletNumber}:</strong> ${pallet.palletType}
+                                    </div>
+                                    ${qtyDisplay}
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; font-size: 0.95em;">
                                         <div><strong>Dimensions:</strong> ${pallet.length}x${pallet.width}x${pallet.height}"</div>
-                                        <div><strong>Weight:</strong> ${pallet.weight} lbs</div>
-                                        <div><strong>Cartons:</strong> ${pallet.cartonCount || 0}</div>
-                                        <div><strong>Cube:</strong> ${pallet.cubeFt} ft³</div>
+                                        <div><strong>Weight:</strong> ${pallet.weight} lbs ${qty > 1 ? `(${pallet.weight * qty} lbs total)` : ''}</div>
+                                        <div><strong>Cartons:</strong> ${pallet.cartonCount || 0} ${qty > 1 ? `(${(pallet.cartonCount || 0) * qty} total)` : ''}</div>
+                                        <div><strong>Cube:</strong> ${pallet.cubeFt} ft³ ${qty > 1 ? `(${(parseFloat(pallet.cubeFt) * qty).toFixed(2)} ft³ total)` : ''}</div>
                                         <div><strong>Footprint:</strong> ${pallet.footprint}</div>
                                         <div><strong>Entered by:</strong> ${pallet.updatedBy}</div>
                                     </div>
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                         </div>
 
                         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
@@ -2627,6 +2639,66 @@
             } else {
                 detailsDiv.style.display = 'none';
                 btn.innerHTML = '📦 View Pallet Details ▼';
+            }
+        }
+
+        async function exportDimsToExcel() {
+            try {
+                // Get the current dims data
+                const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?action=getOrdersWithDims`);
+                const data = await response.json();
+                
+                if (!data.orders || data.orders.length === 0) {
+                    alert('No dimensions data to export');
+                    return;
+                }
+                
+                // Build CSV content
+                let csv = 'Order Number,Client,Priority,Retailer,PO,Ship Date,Mode,Status,Pallet #,Pallet Type,Length,Width,Height,Weight,Cartons,Quantity,Footprint,Cube Ft³,Entered By\n';
+                
+                data.orders.forEach(order => {
+                    order.pallets.forEach(pallet => {
+                        csv += `"${order.orderNumber}",`;
+                        csv += `"${order.client}",`;
+                        csv += `"${order.clientPriority}",`;
+                        csv += `"${order.retailer}",`;
+                        csv += `"${order.po || 'N/A'}",`;
+                        csv += `"${order.requestedShipDate}",`;
+                        csv += `"${order.requestedMode}",`;
+                        csv += `"${order.status}",`;
+                        csv += `${pallet.palletNumber},`;
+                        csv += `"${pallet.palletType}",`;
+                        csv += `${pallet.length},`;
+                        csv += `${pallet.width},`;
+                        csv += `${pallet.height},`;
+                        csv += `${pallet.weight},`;
+                        csv += `${pallet.cartonCount || 0},`;
+                        csv += `${pallet.quantity || 1},`;
+                        csv += `"${pallet.footprint}",`;
+                        csv += `${pallet.cubeFt},`;
+                        csv += `"${pallet.updatedBy}"\n`;
+                    });
+                });
+                
+                // Create download link
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                const timestamp = new Date().toISOString().slice(0, 10);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `Order_Dimensions_${timestamp}.csv`);
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                alert('✅ Dimensions exported successfully! File will download shortly.');
+                
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('Error exporting data. Please try again.');
             }
         }
 
