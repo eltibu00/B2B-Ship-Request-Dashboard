@@ -812,7 +812,7 @@
                                     <option value="Regular 48x40">Regular 48x40</option>
                                     <option value="Euro 31x47">Euro 31x47</option>
                                     <option value="Plastic">Plastic</option>
-                                    <option value="Custom">Custom</option>
+                                    <option value="Box">Box</option>
                                 </select>
                             </div>
 
@@ -871,7 +871,45 @@
                 
                 <div class="info-message" style="display: block;">
                     <h4>ℹ️ View All Orders with Entered Dimensions</h4>
-                    <p>This shows all orders that have pallet dimensions entered. Click on an order to expand and see detailed pallet information.</p>
+                    <p>This shows all orders that have pallet dimensions entered. Use filters below to quickly find specific orders.</p>
+                </div>
+
+                <!-- Filter and Sort Controls -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">🔍 Search Order Number</label>
+                            <input type="text" id="dimsSearchOrder" placeholder="Enter order number..." 
+                                   oninput="filterDimsOrders()" 
+                                   style="width: 100%; padding: 10px; border: 2px solid #667eea; border-radius: 6px;">
+                        </div>
+                        
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">🏢 Filter by Client</label>
+                            <select id="dimsClientFilter" onchange="filterDimsOrders()" 
+                                    style="width: 100%; padding: 10px; border: 2px solid #667eea; border-radius: 6px;">
+                                <option value="">All Clients</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">📋 Sort by</label>
+                            <select id="dimsSortOrder" onchange="sortDimsOrders()" 
+                                    style="width: 100%; padding: 10px; border: 2px solid #667eea; border-radius: 6px;">
+                                <option value="orderNumber">Order Number</option>
+                                <option value="client">Client (A-Z)</option>
+                                <option value="retailer">Retailer (A-Z)</option>
+                                <option value="shipDate">Ship Date (Earliest First)</option>
+                                <option value="totalPallets">Total Pallets (Most First)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; align-items: center; color: #666; font-size: 0.9em;">
+                        <span id="dimsCountDisplay">Showing 0 orders</span>
+                        <button class="btn btn-secondary" onclick="clearDimsFilters()" 
+                                style="padding: 8px 16px; font-size: 0.9em; min-width: auto;">Clear Filters</button>
+                    </div>
                 </div>
 
                 <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
@@ -977,6 +1015,7 @@
                                     <th>Mode</th>
                                     <th>Status</th>
                                     <th>WMS Status</th>
+                                    <th>Order Status</th>
                                     <th>SLA Status</th>
                                     <th>Notes</th>
                                     <th>Created At</th>
@@ -986,7 +1025,7 @@
                             </thead>
                             <tbody id="ordersTableBody">
                                 <tr>
-                                    <td colspan="16" style="text-align: center; padding: 20px;">No orders found</td>
+                                    <td colspan="17" style="text-align: center; padding: 20px;">No orders found</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1145,6 +1184,7 @@
         let currentOrderForDims = null;
         let palletsToSubmit = [];
         let currentOrderDate = '';  // Store order date from lookup
+        let currentOrderStatus = '';  // Store order status from lookup
 
         // ====================================================================
         // INITIALIZATION
@@ -1355,8 +1395,13 @@
                         currentOrderDate = data.orderDate;
                     }
                     
+                    // Store Order Status (hidden)
+                    if (data.orderStatus) {
+                        currentOrderStatus = data.orderStatus;
+                    }
+                    
                     // Show success message
-                    alert(`✅ Order data found!\n\nClient: ${data.client || 'N/A'}\nRetailer: ${data.retailer || 'N/A'}\nShip Method: ${data.requestedMode || 'N/A'}\n${data.orderDate ? 'Order Date: ' + data.orderDate : ''}\n\nPlease fill in the remaining fields.`);
+                    alert(`✅ Order data found!\n\nClient: ${data.client || 'N/A'}\nRetailer: ${data.retailer || 'N/A'}\nShip Method: ${data.requestedMode || 'N/A'}\n${data.orderDate ? 'Order Date: ' + data.orderDate : ''}${data.orderStatus ? '\nOrder Status: ' + data.orderStatus : ''}\n\nPlease fill in the remaining fields.`);
                     
                 } else {
                     alert(`ℹ️ Order ${orderNumber} not found in Master Data.\n\n${result.message || 'Please fill in fields manually.'}`);
@@ -1409,7 +1454,8 @@
                 notes: document.getElementById('notes').value,
                 createdByName: currentUser.name,
                 createdByEmail: currentUser.email,
-                orderDate: currentOrderDate || ''  // NEW: Include Order Date from lookup
+                orderDate: currentOrderDate || '',      // Include Order Date from lookup
+                orderStatus: currentOrderStatus || ''   // Include Order Status from lookup
             };
 
             document.getElementById('orderLoading').style.display = 'block';
@@ -1451,6 +1497,7 @@
             document.getElementById('orderRequestForm').reset();
             document.getElementById('dimsDueByGroup').style.display = 'none';
             currentOrderDate = '';  // Reset stored order date
+            currentOrderStatus = '';  // Reset stored order status
         }
 
         // ====================================================================
@@ -1857,7 +1904,7 @@
                     widthInput.style.backgroundColor = '#e9ecef';
                     lengthInput.style.cursor = 'not-allowed';
                     widthInput.style.cursor = 'not-allowed';
-                } else if (palletType === 'Custom') {
+                } else if (palletType === 'Box') {
                     lengthInput.value = '';
                     widthInput.value = '';
                     lengthInput.readOnly = false;
@@ -1948,6 +1995,7 @@
                             <td>${order.requestedMode}</td>
                             <td><span class="${statusClass}">${order.status}</span></td>
                             <td style="font-size: 0.9em;">${order.wmsStatus || 'N/A'}</td>
+                            <td style="font-size: 0.9em; font-weight: 600; color: #667eea;">${order.orderStatus || ''}</td>
                             <td><span class="${slaClass}">${order.slaStatus}</span></td>
                             <td style="font-size: 0.85em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${order.notes || ''}">${order.notes || ''}</td>
                             <td style="font-size: 0.85em;">${order.createdAt}</td>
@@ -1956,7 +2004,7 @@
                         `;
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="16" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="17" style="text-align: center; padding: 20px;">No active orders found</td></tr>';
                 }
 
                 document.getElementById('dashboardLoading').style.display = 'none';
@@ -2251,6 +2299,7 @@
                     <td>${order.requestedMode}</td>
                     <td><span class="${statusClass}">${order.status}</span></td>
                     <td style="font-size: 0.9em;">${order.wmsStatus || 'N/A'}</td>
+                    <td style="font-size: 0.9em; font-weight: 600; color: #667eea;">${order.orderStatus || ''}</td>
                     <td><span class="${slaClass}">${order.slaStatus}</span></td>
                     <td style="font-size: 0.85em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${order.notes || ''}">${order.notes || ''}</td>
                     <td style="font-size: 0.85em;">${order.createdAt}</td>
@@ -2643,22 +2692,63 @@
 
         function displayOrdersWithDims(orders) {
             const container = document.getElementById('ordersWithDimsList');
+            
+            // Store all orders globally for filtering
+            window.allDimsOrders = orders;
+            
+            // Populate client filter dropdown
+            const clientFilter = document.getElementById('dimsClientFilter');
+            const uniqueClients = [...new Set(orders.map(o => o.client))].sort();
+            const currentClientFilter = clientFilter.value;
+            
+            clientFilter.innerHTML = '<option value="">All Clients</option>';
+            uniqueClients.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client;
+                option.textContent = client;
+                if (client === currentClientFilter) option.selected = true;
+                clientFilter.appendChild(option);
+            });
+            
+            // Apply current filters and sort
+            let filteredOrders = filterAndSortDimsOrders(orders);
+            
+            // Update count display
+            document.getElementById('dimsCountDisplay').textContent = 
+                `Showing ${filteredOrders.length} of ${orders.length} orders`;
+            
+            if (filteredOrders.length === 0) {
+                container.innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: #666;">' +
+                    '<h3>No orders match your filters</h3>' +
+                    '<p>Try adjusting your search criteria or clearing filters.</p>' +
+                    '</div>';
+                return;
+            }
+            
             let html = '';
 
-            orders.forEach((order, index) => {
+            filteredOrders.forEach((order, index) => {
                 const priorityClass = order.clientPriority === 'High' ? 'priority-high' :
                                     order.clientPriority === 'Low' ? 'priority-low' : 'priority-normal';
                 
+                const statusClass = order.status === 'New' ? 'status-new' :
+                                  order.status === 'Dims Entered' ? 'status-dims-entered' : 'status-shipped';
+                
                 html += `
-                    <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                    <div class="dims-order-card" data-client="${order.client}" data-retailer="${order.retailer}" data-order="${order.orderNumber}" 
+                         style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px;">
                             <div>
                                 <h3 style="color: #667eea; margin-bottom: 5px;">
                                     Order #${order.orderNumber} 
                                     <span class="${priorityClass}" style="margin-left: 10px;">${order.clientPriority}</span>
+                                    <span class="${statusClass}" style="margin-left: 10px;">${order.status}</span>
                                 </h3>
                                 <div style="color: #666;">
-                                    <strong>${order.client}</strong> | ${order.retailer} | ${order.requestedMode}
+                                    <strong>Client:</strong> ${order.client} | 
+                                    <strong>Retailer:</strong> ${order.retailer} | 
+                                    <strong>Mode:</strong> ${order.requestedMode}
                                 </div>
                             </div>
                             <div style="text-align: right;">
@@ -2710,7 +2800,7 @@
                         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
                             <strong>PO:</strong> ${order.po || 'N/A'} | 
                             <strong>Ship Date:</strong> ${order.requestedShipDate} | 
-                            <strong>Status:</strong> ${order.status}
+                            <strong>Status:</strong> <span class="${statusClass}">${order.status}</span>
                         </div>
                     </div>
                 `;
@@ -2739,6 +2829,83 @@
             } catch (error) {
                 return 'Invalid date';
             }
+        }
+
+        // ====================================================================
+        // DIMS FILTERING AND SORTING
+        // ====================================================================
+
+        function filterAndSortDimsOrders(orders) {
+            if (!orders || orders.length === 0) return [];
+            
+            const searchTerm = document.getElementById('dimsSearchOrder').value.toLowerCase().trim();
+            const clientFilter = document.getElementById('dimsClientFilter').value;
+            const sortBy = document.getElementById('dimsSortOrder').value;
+            
+            // Filter
+            let filtered = orders.filter(order => {
+                // Search filter
+                if (searchTerm && !order.orderNumber.toString().toLowerCase().includes(searchTerm)) {
+                    return false;
+                }
+                
+                // Client filter
+                if (clientFilter && order.client !== clientFilter) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            // Sort
+            switch(sortBy) {
+                case 'orderNumber':
+                    filtered.sort((a, b) => {
+                        const numA = parseInt(a.orderNumber) || 0;
+                        const numB = parseInt(b.orderNumber) || 0;
+                        return numA - numB;
+                    });
+                    break;
+                    
+                case 'client':
+                    filtered.sort((a, b) => a.client.localeCompare(b.client));
+                    break;
+                    
+                case 'retailer':
+                    filtered.sort((a, b) => a.retailer.localeCompare(b.retailer));
+                    break;
+                    
+                case 'shipDate':
+                    filtered.sort((a, b) => {
+                        const dateA = new Date(a.requestedShipDate);
+                        const dateB = new Date(b.requestedShipDate);
+                        return dateA - dateB;
+                    });
+                    break;
+                    
+                case 'totalPallets':
+                    filtered.sort((a, b) => b.totalPallets - a.totalPallets);
+                    break;
+            }
+            
+            return filtered;
+        }
+
+        function filterDimsOrders() {
+            if (!window.allDimsOrders) return;
+            displayOrdersWithDims(window.allDimsOrders);
+        }
+
+        function sortDimsOrders() {
+            if (!window.allDimsOrders) return;
+            displayOrdersWithDims(window.allDimsOrders);
+        }
+
+        function clearDimsFilters() {
+            document.getElementById('dimsSearchOrder').value = '';
+            document.getElementById('dimsClientFilter').value = '';
+            document.getElementById('dimsSortOrder').value = 'orderNumber';
+            filterDimsOrders();
         }
 
         function togglePalletDetails(index) {
